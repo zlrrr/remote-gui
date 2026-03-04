@@ -1,6 +1,16 @@
 package record
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
 
 // Record represents a single script execution record.
 type Record struct {
@@ -30,26 +40,123 @@ type Store interface {
 	List(page, pageSize int) (*ListResult, error)
 }
 
-// NewFileStore creates a Store backed by JSON Lines files in the given directory.
+// NewFileStore creates a Store backed by individual JSON files in the given directory.
 func NewFileStore(dir string) Store {
 	return &fileStore{dir: dir}
 }
 
 type fileStore struct {
 	dir string
+	mu  sync.RWMutex
+}
+
+// generateID produces a unique record ID like rec-20250301-143022-abc123.
+func generateID(t time.Time) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	suffix := make([]byte, 6)
+	for i := range suffix {
+		suffix[i] = letters[rand.Intn(len(letters))]
+	}
+	return fmt.Sprintf("rec-%s-%s", t.UTC().Format("20060102-150405"), string(suffix))
 }
 
 func (s *fileStore) Save(rec Record) (string, error) {
-	// TODO: implement in Phase 2.2
-	return "", nil
+	if err := os.MkdirAll(s.dir, 0o750); err != nil {
+		return "", fmt.Errorf("cannot create records directory: %w", err)
+	}
+
+	id := generateID(rec.ExecutedAt)
+	rec.ID = id
+
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal record: %w", err)
+	}
+
+	path := filepath.Join(s.dir, id+".json")
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := os.WriteFile(path, data, 0o640); err != nil {
+		return "", fmt.Errorf("failed to write record file: %w", err)
+	}
+
+	return id, nil
 }
 
 func (s *fileStore) Get(id string) (*Record, error) {
-	// TODO: implement in Phase 2.2
-	return nil, nil
+	path := filepath.Join(s.dir, id+".json")
+
+	s.mu.RLock()
+	data, err := os.ReadFile(path)
+	s.mu.RUnlock()
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("record %q not found", id)
+		}
+		return nil, fmt.Errorf("failed to read record file: %w", err)
+	}
+
+	var rec Record
+	if err := json.Unmarshal(data, &rec); err != nil {
+		return nil, fmt.Errorf("failed to parse record: %w", err)
+	}
+
+	return &rec, nil
 }
 
 func (s *fileStore) List(page, pageSize int) (*ListResult, error) {
-	// TODO: implement in Phase 2.2
-	return nil, nil
+	s.mu.RLock()
+	entries, err := os.ReadDir(s.dir)
+	s.mu.RUnlock()
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &ListResult{Page: page, PageSize: pageSize, Records: []*Record{}}, nil
+		}
+		return nil, fmt.Errorf("failed to read records directory: %w", err)
+	}
+
+	// Collect record filenames (only .json files)
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			names = append(names, e.Name())
+		}
+	}
+
+	// Sort by filename descending (newest first, IDs embed timestamp)
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+
+	total := len(names)
+
+	// Paginate
+	start := (page - 1) * pageSize
+	if start >= total {
+		return &ListResult{Total: total, Page: page, PageSize: pageSize, Records: []*Record{}}, nil
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	pageNames := names[start:end]
+
+	records := make([]*Record, 0, len(pageNames))
+	for _, name := range pageNames {
+		id := strings.TrimSuffix(name, ".json")
+		rec, err := s.Get(id)
+		if err != nil {
+			continue // skip corrupted records
+		}
+		records = append(records, rec)
+	}
+
+	return &ListResult{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		Records:  records,
+	}, nil
 }
