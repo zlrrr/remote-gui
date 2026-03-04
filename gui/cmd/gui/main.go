@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"log"
+	"log/slog"
+	"os"
 
 	"github.com/remote-gui/gui/internal/client"
 	"github.com/remote-gui/gui/internal/config"
@@ -11,7 +13,14 @@ import (
 
 func main() {
 	configPath := flag.String("config", "configs/gui.yaml", "path to config file")
+	debug := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
+
+	logLevel := slog.LevelInfo
+	if *debug {
+		logLevel = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
 
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {

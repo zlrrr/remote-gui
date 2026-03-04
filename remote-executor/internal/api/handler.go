@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -118,9 +119,12 @@ func (h *Handler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	slog.Info("execute request", "script", req.Script, "remote_addr", r.RemoteAddr)
+
 	// Look up script
 	spec, ok := h.registry[req.Script]
 	if !ok {
+		slog.Warn("script not found", "script", req.Script)
 		writeJSON(w, http.StatusNotFound, ErrorResponse{
 			Error:   "script_not_found",
 			Details: "script '" + req.Script + "' is not registered",
@@ -157,6 +161,7 @@ func (h *Handler) Execute(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(validationErrors) > 0 {
+		slog.Warn("validation failed", "script", req.Script, "error_count", len(validationErrors))
 		writeJSON(w, http.StatusUnprocessableEntity, ErrorResponse{
 			Error:   "validation_failed",
 			Details: validationErrors,
@@ -180,12 +185,14 @@ func (h *Handler) Execute(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, runner.ErrTimeout) {
+			slog.Warn("script timed out", "script", req.Script)
 			writeJSON(w, http.StatusRequestTimeout, ErrorResponse{
 				Error:   "execution_timeout",
 				Details: "script exceeded timeout",
 			})
 			return
 		}
+		slog.Error("internal error running script", "script", req.Script, "error", err)
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "internal_error",
 			Details: err.Error(),
@@ -215,6 +222,7 @@ func (h *Handler) Execute(w http.ResponseWriter, r *http.Request) {
 		recordID = ""
 	}
 
+	slog.Info("execute success", "script", req.Script, "status", status, "exit_code", result.ExitCode, "duration_ms", result.DurationMs)
 	writeJSON(w, http.StatusOK, ExecuteResponse{
 		RecordID:   recordID,
 		Script:     req.Script,

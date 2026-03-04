@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"syscall"
@@ -48,8 +49,11 @@ type defaultRunner struct{}
 func (r *defaultRunner) Run(ctx context.Context, req RunRequest) (*RunResult, error) {
 	// Verify script exists before starting
 	if _, err := os.Stat(req.ScriptPath); err != nil {
+		slog.Error("script not found", "path", req.ScriptPath, "error", err)
 		return nil, fmt.Errorf("script not found %q: %w", req.ScriptPath, err)
 	}
+
+	slog.Debug("running script", "path", req.ScriptPath, "timeout_sec", req.TimeoutSec, "env_keys", envKeyNames(req.Params))
 
 	// Apply timeout if requested
 	runCtx := ctx
@@ -84,8 +88,10 @@ func (r *defaultRunner) Run(ctx context.Context, req RunRequest) (*RunResult, er
 
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
+		slog.Error("failed to start script", "path", req.ScriptPath, "error", err)
 		return nil, fmt.Errorf("failed to start script: %w", err)
 	}
+	slog.Debug("script started", "pid", cmd.Process.Pid, "path", req.ScriptPath)
 
 	// Watch for context cancellation/timeout and kill the process group.
 	done := make(chan struct{})
@@ -106,11 +112,13 @@ func (r *defaultRunner) Run(ctx context.Context, req RunRequest) (*RunResult, er
 
 	// Check if the timeout fired
 	if runCtx.Err() == context.DeadlineExceeded {
+		slog.Warn("script timed out", "path", req.ScriptPath, "timeout_sec", req.TimeoutSec)
 		return nil, ErrTimeout
 	}
 
 	// Check if the parent context was cancelled
 	if ctx.Err() != nil {
+		slog.Warn("script context cancelled", "path", req.ScriptPath, "error", ctx.Err())
 		return nil, ctx.Err()
 	}
 
@@ -121,9 +129,13 @@ func (r *defaultRunner) Run(ctx context.Context, req RunRequest) (*RunResult, er
 		if errors.As(waitErr, &exitErr) {
 			exitCode = exitErr.ExitCode()
 		} else {
+			slog.Error("script run error", "path", req.ScriptPath, "error", waitErr)
 			return nil, fmt.Errorf("failed to run script: %w", waitErr)
 		}
 	}
+
+	slog.Debug("script finished", "path", req.ScriptPath, "exit_code", exitCode, "duration_ms", durationMs,
+		"stdout_len", len(stdoutBuf.String()), "stderr_len", len(stderrBuf.String()))
 
 	return &RunResult{
 		ExitCode:   exitCode,
@@ -131,6 +143,15 @@ func (r *defaultRunner) Run(ctx context.Context, req RunRequest) (*RunResult, er
 		Stderr:     stderrBuf.String(),
 		DurationMs: durationMs,
 	}, nil
+}
+
+// envKeyNames returns only the key names from an env params map (safe to log).
+func envKeyNames(params map[string]string) []string {
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // limitWriter truncates writes after remaining bytes are exhausted.
