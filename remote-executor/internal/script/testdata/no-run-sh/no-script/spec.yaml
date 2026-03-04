@@ -1,0 +1,4 @@
+name: no-script
+description: "test script without run.sh"
+timeout_seconds: 10
+params: []

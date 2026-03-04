@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  remote-executor:
+    build:
+      context: remote-executor
+      dockerfile: deployments/Dockerfile
+    image: remote-executor:local
+    container_name: remote-executor
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./certs:/etc/remote-executor/certs:ro
+      - ./remote-executor/scripts:/opt/remote-executor/scripts:ro
+      - executor-records:/var/lib/remote-executor/records
+    environment:
+      - ROCKETMQ_NAMESRV=${ROCKETMQ_NAMESRV:-192.168.0.43:31430}
+    restart: unless-stopped
+
+  remote-gui:
+    build:
+      context: gui
+      dockerfile: deployments/Dockerfile
+    image: remote-gui:local
+    container_name: remote-gui
+    depends_on:
+      - remote-executor
+    volumes:
+      - ./certs:/etc/remote-gui/certs:ro
+      - ./gui/configs:/etc/remote-gui:ro
+    network_mode: host
+
+volumes:
+  executor-records:

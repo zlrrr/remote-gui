@@ -1,0 +1,17 @@
+executor:
+  endpoint: "https://192.168.0.10:8443"
+  tls:
+    ca_cert:     "certs/ca.crt"
+    client_cert: "certs/gui.crt"
+    client_key:  "certs/gui.key"
+
+operations:
+  - alias: "查询 RocketMQ 消息"
+    script: "query-rocketmq-msg"
+    params:
+      - label: "Topic 名称"
+        name:  topic
+        placeholder: "e.g. test-topic"
+      - label: "Message ID"
+        name:  message_id
+        placeholder: "e.g. 01DE76E4BEE026..."

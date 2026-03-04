@@ -1,0 +1,30 @@
+[Unit]
+Description=remote-executor Script Execution Service
+Documentation=https://github.com/remote-gui/remote-gui
+After=network.target
+
+[Service]
+Type=simple
+User=executor
+Group=executor
+
+ExecStart=/usr/local/bin/remote-executor \
+  --config /etc/remote-executor/executor.yaml \
+  --scripts-dir /opt/remote-executor/scripts
+
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/opt/remote-executor/scripts
+ReadWritePaths=/var/lib/remote-executor/records
+PrivateTmp=yes
+
+# Allow docker socket access if scripts use docker
+SupplementaryGroups=docker
+
+[Install]
+WantedBy=multi-user.target

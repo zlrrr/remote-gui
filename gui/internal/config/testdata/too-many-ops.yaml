@@ -1,0 +1,37 @@
+executor:
+  endpoint: "https://localhost:8443"
+
+operations:
+  - alias: "Op1"
+    script: "s1"
+    params: []
+  - alias: "Op2"
+    script: "s2"
+    params: []
+  - alias: "Op3"
+    script: "s3"
+    params: []
+  - alias: "Op4"
+    script: "s4"
+    params: []
+  - alias: "Op5"
+    script: "s5"
+    params: []
+  - alias: "Op6"
+    script: "s6"
+    params: []
+  - alias: "Op7"
+    script: "s7"
+    params: []
+  - alias: "Op8"
+    script: "s8"
+    params: []
+  - alias: "Op9"
+    script: "s9"
+    params: []
+  - alias: "Op10"
+    script: "s10"
+    params: []
+  - alias: "Op11"
+    script: "s11"
+    params: []

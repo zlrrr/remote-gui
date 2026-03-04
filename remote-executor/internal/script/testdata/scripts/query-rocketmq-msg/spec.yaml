@@ -1,0 +1,22 @@
+name: query-rocketmq-msg
+description: "查询 RocketMQ 指定 Topic 下的消息体"
+timeout_seconds: 60
+
+params:
+  - name: topic
+    description: "消息所在的 Topic 名称"
+    type: string
+    required: true
+    rules:
+      pattern: '^[a-zA-Z0-9_\-]{1,64}$'
+      min_length: 1
+      max_length: 64
+
+  - name: message_id
+    description: "消息的 UniqueKey（Message ID）"
+    type: string
+    required: true
+    rules:
+      pattern: '^[A-F0-9]{32,40}$'
+      min_length: 32
+      max_length: 40

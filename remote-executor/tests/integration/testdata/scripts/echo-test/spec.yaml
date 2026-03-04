@@ -1,0 +1,13 @@
+name: echo-test
+description: "Echo a message (integration test script)"
+timeout_seconds: 10
+
+params:
+  - name: message
+    description: "Message to echo"
+    type: string
+    required: true
+    rules:
+      pattern: '^[a-zA-Z0-9_\-]{1,64}$'
+      min_length: 1
+      max_length: 64
