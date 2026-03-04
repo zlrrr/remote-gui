@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
+	"os"
 
 	"github.com/remote-gui/remote-executor/internal/config"
 	"github.com/remote-gui/remote-executor/internal/record"
@@ -15,7 +17,14 @@ import (
 func main() {
 	configPath := flag.String("config", "configs/executor.yaml", "path to config file")
 	scriptsDir := flag.String("scripts-dir", "", "override scripts directory from config")
+	debug := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
+
+	logLevel := slog.LevelInfo
+	if *debug {
+		logLevel = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

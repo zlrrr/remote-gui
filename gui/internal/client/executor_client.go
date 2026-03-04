@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 )
@@ -116,8 +117,8 @@ type executeRequest struct {
 }
 
 type errorResponse struct {
-	Error   string          `json:"error"`
-	Details json.RawMessage `json:"details,omitempty"`
+	Error   string `json:"error"`
+	Details string `json:"details,omitempty"`
 }
 
 func (c *httpExecutorClient) ListScripts() ([]ScriptInfo, error) {
@@ -140,6 +141,8 @@ func (c *httpExecutorClient) ListScripts() ([]ScriptInfo, error) {
 }
 
 func (c *httpExecutorClient) Execute(scriptName string, params map[string]string) (*ExecuteResult, error) {
+	slog.Debug("executing script", "endpoint", c.cfg.Endpoint, "script", scriptName)
+
 	body, err := json.Marshal(executeRequest{Script: scriptName, Params: params})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -154,6 +157,8 @@ func (c *httpExecutorClient) Execute(scriptName string, params map[string]string
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	slog.Debug("response received", "status_code", resp.StatusCode)
 
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -179,6 +184,10 @@ func (c *httpExecutorClient) Execute(scriptName string, params map[string]string
 		errCode := errResp.Error
 		if errCode == "" {
 			errCode = fmt.Sprintf("http_%d", resp.StatusCode)
+		}
+		slog.Error("server error", "code", errCode, "details", errResp.Details)
+		if errResp.Details != "" {
+			return nil, fmt.Errorf("%s: %s", errCode, errResp.Details)
 		}
 		return nil, fmt.Errorf("%s", errCode)
 	}
