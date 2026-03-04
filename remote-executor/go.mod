@@ -3,6 +3,7 @@ module github.com/remote-gui/remote-executor
 go 1.24.7
 
 require (
+	github.com/go-chi/chi/v5 v5.2.5
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 )
