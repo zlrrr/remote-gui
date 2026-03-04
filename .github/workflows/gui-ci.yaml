@@ -2,9 +2,13 @@ name: gui CI
 
 on:
   push:
-    paths: ["gui/**"]
+    paths:
+      - "gui/**"
+      - ".github/workflows/gui-ci.yaml"
   pull_request:
-    paths: ["gui/**"]
+    paths:
+      - "gui/**"
+      - ".github/workflows/gui-ci.yaml"
 
 jobs:
   test:
@@ -17,6 +21,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
+          cache-dependency-path: gui/go.sum
       - name: Run tests
         run: go test ./... -v -race -timeout 60s -coverprofile=coverage.out
       - name: Upload coverage
@@ -24,13 +29,64 @@ jobs:
         with:
           files: gui/coverage.out
 
-  build:
+  # ── Primary deliverable: Windows desktop GUI (Fyne + CGO) ──────────────────
+  build-windows-fyne-gui:
+    name: Build Windows Fyne GUI (amd64)
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Provide x86_64 MinGW-w64 gcc so CGO can cross-compile Fyne for Windows
+      - name: Set up MSYS2 / MinGW-w64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-gcc
+          # Inject MINGW64 bin into the standard Windows PATH so `go build` finds gcc
+          path-type: inherit
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: gui/go.sum
+
+      - name: Add Fyne dependency
+        working-directory: gui
+        run: go get fyne.io/fyne/v2@latest
+
+      - name: Build Fyne GUI exe
+        working-directory: gui
+        env:
+          CGO_ENABLED: "1"
+          # -H=windowsgui: suppress the console window so only the Fyne window appears
+        run: go build -tags fyne -ldflags="-s -w -H=windowsgui" -o dist/remote-gui-windows-amd64.exe ./cmd/gui/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-gui-windows-amd64
+          path: gui/dist/remote-gui-windows-amd64.exe
+          if-no-files-found: error
+
+  # ── CLI mode builds (pure Go, no CGO, no Fyne) ─────────────────────────────
+  build-cli:
+    name: Build CLI (${{ matrix.goos }}/${{ matrix.goarch }})
     needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [linux, darwin, windows]
-        arch: [amd64, arm64]
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+          - goos: linux
+            goarch: arm64
+            ext: ""
+          - goos: windows
+            goarch: amd64
+            ext: ".exe"
     defaults:
       run:
         working-directory: gui
@@ -39,18 +95,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-      - name: Build binary (CLI mode)
+          cache-dependency-path: gui/go.sum
+      - name: Build CLI binary
         env:
-          GOOS: ${{ matrix.os }}
-          GOARCH: ${{ matrix.arch }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
         run: |
           go build -ldflags="-s -w" \
-            -o dist/remote-gui-${{ matrix.os }}-${{ matrix.arch }} \
+            -o dist/remote-gui-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} \
             ./cmd/gui/
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: remote-gui-${{ matrix.os }}-${{ matrix.arch }}
+          name: remote-gui-cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: gui/dist/
 
   docker:
