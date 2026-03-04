@@ -1,0 +1,72 @@
+name: remote-executor CI
+
+on:
+  push:
+    paths: ["remote-executor/**"]
+  pull_request:
+    paths: ["remote-executor/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: remote-executor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Run tests
+        run: go test ./... -v -race -timeout 120s -coverprofile=coverage.out
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: remote-executor/coverage.out
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux, darwin, windows]
+        arch: [amd64, arm64]
+    defaults:
+      run:
+        working-directory: remote-executor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          go build -ldflags="-s -w" \
+            -o dist/remote-executor-${{ matrix.os }}-${{ matrix.arch }} \
+            ./cmd/executor/
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-executor-${{ matrix.os }}-${{ matrix.arch }}
+          path: remote-executor/dist/
+
+  docker:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: remote-executor
+          file: remote-executor/deployments/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/remote-executor:latest
