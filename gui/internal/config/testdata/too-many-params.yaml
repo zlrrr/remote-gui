@@ -1,0 +1,25 @@
+executor:
+  endpoint: "https://localhost:8443"
+
+operations:
+  - alias: "Op1"
+    script: "s1"
+    params:
+      - label: "P1"
+        name: p1
+        placeholder: ""
+      - label: "P2"
+        name: p2
+        placeholder: ""
+      - label: "P3"
+        name: p3
+        placeholder: ""
+      - label: "P4"
+        name: p4
+        placeholder: ""
+      - label: "P5"
+        name: p5
+        placeholder: ""
+      - label: "P6"
+        name: p6
+        placeholder: ""
