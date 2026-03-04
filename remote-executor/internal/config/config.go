@@ -1,5 +1,12 @@
 package config
 
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
 // Config holds the executor server configuration.
 type Config struct {
 	Server  ServerConfig  `yaml:"server"`
@@ -33,6 +40,15 @@ type TLSConfig struct {
 
 // Load reads and parses the configuration file at the given path.
 func Load(path string) (*Config, error) {
-	// TODO: implement in Phase 3
-	return &Config{}, nil
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read config file %q: %w", path, err)
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid YAML in config file %q: %w", path, err)
+	}
+
+	return &cfg, nil
 }
