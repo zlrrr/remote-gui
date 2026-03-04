@@ -164,10 +164,16 @@ func (lw *limitWriter) Write(p []byte) (int, error) {
 	if lw.remaining <= 0 {
 		return len(p), nil // discard silently
 	}
+	origLen := len(p)
 	if len(p) > lw.remaining {
 		p = p[:lw.remaining]
 	}
 	n, err := lw.w.Write(p)
 	lw.remaining -= n
-	return n, err
+	if err != nil {
+		return n, err
+	}
+	// Return origLen to satisfy io.Writer contract: caller expects n == len(p) on success.
+	// Bytes beyond the limit are silently dropped, but the write is not an error.
+	return origLen, nil
 }
