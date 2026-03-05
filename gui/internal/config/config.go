@@ -9,35 +9,35 @@ import (
 
 // Config holds the GUI configuration.
 type Config struct {
-	Executor   ExecutorConfig    `yaml:"executor"`
-	Operations []OperationConfig `yaml:"operations"`
+	Executor   ExecutorConfig    `yaml:"executor"   json:"executor"`
+	Operations []OperationConfig `yaml:"operations" json:"operations"`
 }
 
 // ExecutorConfig holds connection settings for the remote-executor.
 type ExecutorConfig struct {
-	Endpoint string    `yaml:"endpoint"`
-	TLS      TLSConfig `yaml:"tls"`
+	Endpoint string    `yaml:"endpoint" json:"endpoint"`
+	TLS      TLSConfig `yaml:"tls"      json:"tls"`
 }
 
 // TLSConfig holds TLS certificate paths.
 type TLSConfig struct {
-	CACert     string `yaml:"ca_cert"`
-	ClientCert string `yaml:"client_cert"`
-	ClientKey  string `yaml:"client_key"`
+	CACert     string `yaml:"ca_cert"     json:"ca_cert"`
+	ClientCert string `yaml:"client_cert" json:"client_cert"`
+	ClientKey  string `yaml:"client_key"  json:"client_key"`
 }
 
 // OperationConfig defines a single GUI operation (alias for a script).
 type OperationConfig struct {
-	Alias  string        `yaml:"alias"`
-	Script string        `yaml:"script"`
-	Params []ParamConfig `yaml:"params"`
+	Alias  string        `yaml:"alias"   json:"alias"`
+	Script string        `yaml:"script"  json:"script"`
+	Params []ParamConfig `yaml:"params"  json:"params"`
 }
 
 // ParamConfig defines a parameter input field in the GUI.
 type ParamConfig struct {
-	Label       string `yaml:"label"`
-	Name        string `yaml:"name"`
-	Placeholder string `yaml:"placeholder"`
+	Label       string `yaml:"label"       json:"label"`
+	Name        string `yaml:"name"        json:"name"`
+	Placeholder string `yaml:"placeholder" json:"placeholder"`
 }
 
 const (
