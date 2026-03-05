@@ -112,6 +112,47 @@ jobs:
           name: remote-gui-cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: gui/dist/
 
+  # ── Web Client builds (pure Go, no CGO, embedded web UI) ──────────────────
+  build-webclient:
+    name: Build Web Client (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            ext: ".exe"
+          - goos: linux
+            goarch: amd64
+            ext: ""
+          - goos: darwin
+            goarch: amd64
+            ext: ""
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: gui/go.sum
+      - name: Build web client binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          go build -ldflags="-s -w" \
+            -o dist/remote-gui-webclient-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} \
+            ./cmd/webclient/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-gui-webclient-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: gui/dist/remote-gui-webclient-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          if-no-files-found: error
+
   docker:
     needs: test
     if: github.ref == 'refs/heads/main'

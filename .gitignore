@@ -1,6 +1,8 @@
 # Binaries
 remote-executor/dist/
 gui/dist/
+gui/webclient
+gui/gui
 
 # TLS Certificates (production keys — keep dev certs in certs/ for convenience)
 certs/*.key
