@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remote GUI</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f5f5;
+    --surface: #ffffff;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --danger: #dc2626;
+    --success: #16a34a;
+    --border: #d1d5db;
+    --text: #111827;
+    --text-muted: #6b7280;
+    --radius: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,.1);
+  }
+
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── layout ── */
+  header { background: var(--primary); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  header span { font-size: 0.8rem; opacity: .75; }
+
+  nav { display: flex; gap: 0; border-bottom: 2px solid var(--border); background: var(--surface); padding: 0 24px; }
+  nav button { padding: 12px 20px; border: none; background: none; cursor: pointer; font-size: .9rem; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: .15s; }
+  nav button.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  nav button:hover:not(.active) { color: var(--text); }
+
+  main { max-width: 860px; margin: 32px auto; padding: 0 16px; }
+
+  section { display: none; }
+  section.active { display: block; }
+
+  /* ── card ── */
+  .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; }
+  .card h2 { font-size: .95rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 16px; }
+
+  /* ── form elements ── */
+  label { display: block; font-size: .85rem; font-weight: 500; margin-bottom: 4px; }
+  input[type=text], select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: .9rem; font-family: inherit; background: var(--bg); color: var(--text); transition: border-color .15s;
+  }
+  input[type=text]:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
+  .field { margin-bottom: 14px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hint { font-size: .78rem; color: var(--text-muted); margin-top: 3px; }
+
+  /* ── buttons ── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: var(--radius);
+         border: none; cursor: pointer; font-size: .9rem; font-weight: 500; transition: .15s; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-danger  { background: var(--danger); color: #fff; }
+  .btn-danger:hover { filter: brightness(1.1); }
+  .btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-sm { padding: 5px 12px; font-size: .8rem; }
+
+  /* ── execute tab ── */
+  #op-select { font-size: 1rem; padding: 10px; }
+  #params-area { margin: 18px 0; }
+  #params-area .field label { font-size: .9rem; }
+
+  /* result */
+  #result-box { margin-top: 24px; display: none; }
+  .result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .badge { padding: 3px 10px; border-radius: 99px; font-size: .78rem; font-weight: 600; }
+  .badge-ok  { background: #dcfce7; color: var(--success); }
+  .badge-err { background: #fee2e2; color: var(--danger); }
+  .result-meta { font-size: .8rem; color: var(--text-muted); }
+  .output-label { font-size: .78rem; font-weight: 600; color: var(--text-muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 14px; border-radius: var(--radius); font-size: .82rem;
+        line-height: 1.6; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
+  pre.empty { color: #64748b; font-style: italic; }
+
+  /* ── settings tab ── */
+  .op-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .op-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .op-card-header strong { font-size: .9rem; }
+  .params-list { margin-top: 10px; }
+  .param-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 8px; }
+  .param-row label { font-size: .78rem; }
+  .add-op-btn { margin-top: 4px; }
+  .settings-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  #save-status { font-size: .85rem; }
+  #save-status.ok  { color: var(--success); }
+  #save-status.err { color: var(--danger); }
+
+  /* ── toast ── */
+  #toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius);
+           background: #1e293b; color: #fff; font-size: .88rem; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 999; }
+  #toast.show { opacity: 1; }
+
+  /* ── spinner ── */
+  .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff;
+             border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── connection test ── */
+  #conn-test-result { font-size: .82rem; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+  <h1>Remote GUI</h1>
+  <span>远程脚本执行客户端</span>
+</header>
+
+<nav>
+  <button class="active" data-tab="execute">执行操作</button>
+  <button data-tab="settings">配置设置</button>
+</nav>
+
+<main>
+  <!-- ══ Execute Tab ══ -->
+  <section id="tab-execute" class="active">
+    <div class="card">
+      <h2>选择操作</h2>
+      <div class="field">
+        <select id="op-select"><option value="">-- 请选择操作 --</option></select>
+      </div>
+      <div id="params-area"></div>
+      <button class="btn btn-primary" id="exec-btn" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        执行
+      </button>
+    </div>
+
+    <div class="card" id="result-box">
+      <h2>执行结果</h2>
+      <div class="result-header">
+        <span class="badge" id="result-badge"></span>
+        <span class="result-meta" id="result-meta"></span>
+      </div>
+      <div class="output-label">标准输出 (stdout)</div>
+      <pre id="result-stdout"></pre>
+      <div class="output-label" style="margin-top:12px">标准错误 (stderr)</div>
+      <pre id="result-stderr"></pre>
+    </div>
+  </section>
+
+  <!-- ══ Settings Tab ══ -->
+  <section id="tab-settings">
+    <div class="card">
+      <h2>Executor 连接配置</h2>
+      <div class="field">
+        <label>Endpoint（HTTPS 地址）</label>
+        <input type="text" id="cfg-endpoint" placeholder="https://192.168.0.10:8443">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>CA 证书路径</label>
+          <input type="text" id="cfg-ca" placeholder="certs/ca.crt">
+        </div>
+        <div class="field">
+          <label>客户端证书路径</label>
+          <input type="text" id="cfg-cert" placeholder="certs/gui.crt">
+        </div>
+      </div>
+      <div class="field">
+        <label>客户端私钥路径</label>
+        <input type="text" id="cfg-key" placeholder="certs/gui.key">
+        <div class="hint">路径相对于 exe 所在目录，或使用绝对路径。</div>
+      </div>
+      <button class="btn btn-outline btn-sm" id="conn-test-btn">测试连接</button>
+      <div id="conn-test-result"></div>
+    </div>
+
+    <div class="card">
+      <h2>操作列表</h2>
+      <div id="ops-list"></div>
+      <button class="btn btn-outline add-op-btn" id="add-op-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        添加操作
+      </button>
+    </div>
+
+    <div class="settings-actions">
+      <button class="btn btn-primary" id="save-btn">保存配置</button>
+      <span id="save-status"></span>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+let cfg = { executor: { endpoint: '', tls: { ca_cert: '', client_cert: '', client_key: '' } }, operations: [] };
+let ops = []; // local editable copy of operations for settings tab
+
+// ── Tabs ───────────────────────────────────────────────────────────────
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'execute') refreshExecuteTab();
+  });
+});
+
+// ── Toast ──────────────────────────────────────────────────────────────
+function toast(msg, dur = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+// ── API helpers ────────────────────────────────────────────────────────
+async function apiGet(path) {
+  const r = await fetch(path);
+  if (!r.ok) { const e = await r.json().catch(() => ({ error: r.statusText })); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+
+async function apiPost(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(() => ({ error: r.statusText })); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+
+// ── Load config from backend ───────────────────────────────────────────
+async function loadConfig() {
+  try {
+    cfg = await apiGet('/api/config');
+    cfg.executor = cfg.executor || { endpoint: '', tls: {} };
+    cfg.executor.tls = cfg.executor.tls || {};
+    cfg.operations = cfg.operations || [];
+  } catch (e) {
+    console.warn('Could not load config:', e.message);
+    cfg = { executor: { endpoint: '', tls: { ca_cert: '', client_cert: '', client_key: '' } }, operations: [] };
+  }
+  ops = JSON.parse(JSON.stringify(cfg.operations || []));
+}
+
+// ── Execute Tab ────────────────────────────────────────────────────────
+function refreshExecuteTab() {
+  const sel = document.getElementById('op-select');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">-- 请选择操作 --</option>';
+  (cfg.operations || []).forEach((op, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = op.alias || op.script || `操作 ${i + 1}`;
+    sel.appendChild(o);
+  });
+  sel.value = prev;
+  renderParams();
+}
+
+function renderParams() {
+  const sel = document.getElementById('op-select');
+  const area = document.getElementById('params-area');
+  const execBtn = document.getElementById('exec-btn');
+  area.innerHTML = '';
+  if (sel.value === '') { execBtn.disabled = true; return; }
+  const op = cfg.operations[+sel.value];
+  if (!op) { execBtn.disabled = true; return; }
+  execBtn.disabled = false;
+  (op.params || []).forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'field';
+    d.innerHTML = `<label>${escHtml(p.label || p.name)}</label>
+      <input type="text" data-param="${escHtml(p.name)}" placeholder="${escHtml(p.placeholder || '')}">`;
+    area.appendChild(d);
+  });
+}
+
+document.getElementById('op-select').addEventListener('change', renderParams);
+
+document.getElementById('exec-btn').addEventListener('click', async () => {
+  const sel = document.getElementById('op-select');
+  if (sel.value === '') return;
+  const op = cfg.operations[+sel.value];
+  const params = {};
+  document.querySelectorAll('#params-area input').forEach(inp => { params[inp.dataset.param] = inp.value; });
+
+  const btn = document.getElementById('exec-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 执行中…';
+
+  const box = document.getElementById('result-box');
+  box.style.display = 'none';
+
+  try {
+    const res = await apiPost('/api/execute', { script: op.script, params });
+    box.style.display = 'block';
+    const ok = res.exit_code === 0;
+    document.getElementById('result-badge').className = 'badge ' + (ok ? 'badge-ok' : 'badge-err');
+    document.getElementById('result-badge').textContent = ok ? '成功' : `失败 (exit ${res.exit_code})`;
+    document.getElementById('result-meta').textContent = `耗时 ${res.duration_ms} ms · 记录 ${res.record_id || '-'}`;
+    setOutput('result-stdout', res.stdout);
+    setOutput('result-stderr', res.stderr);
+  } catch (e) {
+    box.style.display = 'block';
+    document.getElementById('result-badge').className = 'badge badge-err';
+    document.getElementById('result-badge').textContent = '请求失败';
+    document.getElementById('result-meta').textContent = '';
+    setOutput('result-stdout', '');
+    setOutput('result-stderr', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> 执行';
+  }
+});
+
+function setOutput(id, text) {
+  const el = document.getElementById(id);
+  if (!text) { el.textContent = '(空)'; el.classList.add('empty'); }
+  else { el.textContent = text; el.classList.remove('empty'); }
+}
+
+// ── Settings Tab ───────────────────────────────────────────────────────
+function renderSettings() {
+  document.getElementById('cfg-endpoint').value = cfg.executor?.endpoint || '';
+  document.getElementById('cfg-ca').value   = cfg.executor?.tls?.ca_cert     || '';
+  document.getElementById('cfg-cert').value = cfg.executor?.tls?.client_cert || '';
+  document.getElementById('cfg-key').value  = cfg.executor?.tls?.client_key  || '';
+  renderOps();
+}
+
+function renderOps() {
+  const list = document.getElementById('ops-list');
+  list.innerHTML = '';
+  ops.forEach((op, oi) => {
+    const card = document.createElement('div');
+    card.className = 'op-card';
+    card.innerHTML = `
+      <div class="op-card-header">
+        <strong>操作 ${oi + 1}</strong>
+        <button class="btn btn-danger btn-sm" onclick="removeOp(${oi})">删除</button>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>别名（UI 显示名称）</label>
+          <input type="text" value="${escHtml(op.alias||'')}" oninput="ops[${oi}].alias=this.value" placeholder="如：查询 RocketMQ 消息">
+        </div>
+        <div class="field">
+          <label>脚本名称（script）</label>
+          <input type="text" value="${escHtml(op.script||'')}" oninput="ops[${oi}].script=this.value" placeholder="如：query-rocketmq-msg">
+        </div>
+      </div>
+      <div class="params-list" id="params-${oi}"></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="addParam(${oi})">+ 添加参数</button>`;
+    list.appendChild(card);
+    renderParams2(oi);
+  });
+}
+
+function renderParams2(oi) {
+  const container = document.getElementById(`params-${oi}`);
+  if (!container) return;
+  container.innerHTML = '';
+  (ops[oi].params || []).forEach((p, pi) => {
+    const row = document.createElement('div');
+    row.className = 'param-row';
+    row.innerHTML = `
+      <div><label>标签 (label)</label>
+        <input type="text" value="${escHtml(p.label||'')}" oninput="ops[${oi}].params[${pi}].label=this.value" placeholder="如：Topic 名称"></div>
+      <div><label>参数名 (name)</label>
+        <input type="text" value="${escHtml(p.name||'')}" oninput="ops[${oi}].params[${pi}].name=this.value" placeholder="如：topic"></div>
+      <div><label>占位提示 (placeholder)</label>
+        <input type="text" value="${escHtml(p.placeholder||'')}" oninput="ops[${oi}].params[${pi}].placeholder=this.value" placeholder="如：e.g. test-topic"></div>
+      <div style="padding-bottom:1px"><label>&nbsp;</label>
+        <button class="btn btn-outline btn-sm" onclick="removeParam(${oi},${pi})">✕</button></div>`;
+    container.appendChild(row);
+  });
+}
+
+function addOp() {
+  ops.push({ alias: '', script: '', params: [] });
+  renderOps();
+}
+
+function removeOp(i) {
+  ops.splice(i, 1);
+  renderOps();
+}
+
+function addParam(oi) {
+  if (!ops[oi].params) ops[oi].params = [];
+  ops[oi].params.push({ label: '', name: '', placeholder: '' });
+  renderParams2(oi);
+}
+
+function removeParam(oi, pi) {
+  ops[oi].params.splice(pi, 1);
+  renderParams2(oi);
+}
+
+document.getElementById('add-op-btn').addEventListener('click', addOp);
+
+document.getElementById('save-btn').addEventListener('click', async () => {
+  const newCfg = {
+    executor: {
+      endpoint:   document.getElementById('cfg-endpoint').value.trim(),
+      tls: {
+        ca_cert:     document.getElementById('cfg-ca').value.trim(),
+        client_cert: document.getElementById('cfg-cert').value.trim(),
+        client_key:  document.getElementById('cfg-key').value.trim(),
+      }
+    },
+    operations: ops
+  };
+  const status = document.getElementById('save-status');
+  try {
+    await apiPost('/api/config', newCfg);
+    cfg = JSON.parse(JSON.stringify(newCfg));
+    status.className = 'ok';
+    status.textContent = '✓ 配置已保存';
+    toast('配置已保存');
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch (e) {
+    status.className = 'err';
+    status.textContent = '✗ ' + e.message;
+  }
+});
+
+// ── Connection test ────────────────────────────────────────────────────
+document.getElementById('conn-test-btn').addEventListener('click', async () => {
+  const el = document.getElementById('conn-test-result');
+  el.textContent = '连接中…';
+  el.style.color = 'var(--text-muted)';
+  try {
+    const data = await apiGet('/api/scripts');
+    const count = (data.scripts || []).length;
+    el.textContent = `✓ 连接成功，共发现 ${count} 个脚本`;
+    el.style.color = 'var(--success)';
+  } catch (e) {
+    el.textContent = '✗ ' + e.message;
+    el.style.color = 'var(--danger)';
+  }
+});
+
+// ── Utilities ──────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+(async () => {
+  await loadConfig();
+  refreshExecuteTab();
+  renderSettings();
+})();
+</script>
+</body>
+</html>
